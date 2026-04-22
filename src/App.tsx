@@ -14,6 +14,7 @@ import { useRouteShapes, type RouteShape } from "./useRouteShapes";
 import { useWalkTimes } from "./useWalkTimes";
 import PredictionPanel from "./PredictionPanel";
 import RecommendationPanel from "./RecommendationPanel";
+import { useSlackAlert } from "./useSlackAlert";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 
@@ -44,9 +45,13 @@ function App() {
   usePredictions();
   useVehicles();
   useAlerts();
+  useSlackAlert();
 
   const home = useStore((s) => s.home);
   const setHome = useStore((s) => s.setHome);
+  const alertArmed = useStore((s) => s.alertArmed);
+  const setAlertArmed = useStore((s) => s.setAlertArmed);
+  const alertFired = useStore((s) => s.alertFired);
   const trains = useStore((s) => s.trains);
   const predictions = useStore((s) => s.predictions);
   const activeStops = useStore((s) => s.activeStops);
@@ -212,6 +217,9 @@ function App() {
         onCancel={() => setPicking(false)}
         darkMode={darkMode}
         onToggleDark={() => setDarkMode((d) => !d)}
+        alertArmed={alertArmed}
+        alertFired={alertFired}
+        onToggleAlert={() => setAlertArmed(!alertArmed)}
       />
     </div>
   );
@@ -224,6 +232,9 @@ function HomePanel({
   onCancel,
   darkMode,
   onToggleDark,
+  alertArmed,
+  alertFired,
+  onToggleAlert,
 }: {
   home: [number, number];
   picking: boolean;
@@ -231,6 +242,9 @@ function HomePanel({
   onCancel: () => void;
   darkMode: boolean;
   onToggleDark: () => void;
+  alertArmed: boolean;
+  alertFired: boolean;
+  onToggleAlert: () => void;
 }) {
   return (
     <div style={homePanelStyle}>
@@ -267,9 +281,51 @@ function HomePanel({
           </button>
         </div>
       ) : (
-        <button onClick={onPickStart} style={btnStyle("#3b82f6")}>
-          Move Home
-        </button>
+        <>
+          <button onClick={onPickStart} style={btnStyle("#3b82f6")}>
+            Move Home
+          </button>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 10,
+              paddingTop: 8,
+              borderTop: "1px solid rgba(255,255,255,0.1)",
+            }}
+          >
+            <button
+              onClick={onToggleAlert}
+              style={{
+                width: 36,
+                height: 20,
+                borderRadius: 10,
+                border: "none",
+                background: alertArmed ? "#22c55e" : "#4b5563",
+                position: "relative",
+                cursor: "pointer",
+                transition: "background 0.2s",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  left: alertArmed ? 18 : 2,
+                  width: 16,
+                  height: 16,
+                  borderRadius: 8,
+                  background: "#fff",
+                  transition: "left 0.2s",
+                }}
+              />
+            </button>
+            <span style={{ fontSize: 11, color: "#ccc" }}>
+              {alertFired ? "Alert sent!" : alertArmed ? "Alert armed" : "Slack alert"}
+            </span>
+          </div>
+        </>
       )}
     </div>
   );

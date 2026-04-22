@@ -38,6 +38,11 @@ interface AppState {
 
   walkRoutes: { stopId: string; path: [number, number][] }[];
   setWalkRoutes: (routes: { stopId: string; path: [number, number][] }[]) => void;
+
+  alertArmed: boolean;
+  setAlertArmed: (armed: boolean) => void;
+  alertFired: boolean;
+  setAlertFired: (fired: boolean) => void;
 }
 
 export const useStore = create<AppState>()(devtools((set) => ({
@@ -94,4 +99,9 @@ export const useStore = create<AppState>()(devtools((set) => ({
 
   walkRoutes: [],
   setWalkRoutes: (walkRoutes) => set({ walkRoutes }),
+
+  alertArmed: false,
+  setAlertArmed: (alertArmed) => set({ alertArmed, alertFired: false }),
+  alertFired: false,
+  setAlertFired: (alertFired) => set({ alertFired }),
 }), { name: "mbta-store" }));
