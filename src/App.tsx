@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import Map from "react-map-gl/mapbox";
 import DeckGL from "@deck.gl/react";
-import { IconLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { IconLayer, PathLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import { PathStyleExtension } from "@deck.gl/extensions";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { usePredictions } from "./usePredictions";
@@ -15,6 +15,7 @@ import { useWalkTimes } from "./useWalkTimes";
 import PredictionPanel from "./PredictionPanel";
 import RecommendationPanel from "./RecommendationPanel";
 import { useSlackAlert } from "./useSlackAlert";
+import { useRecommendation } from "./useRecommendation";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 
@@ -22,6 +23,7 @@ interface StopMarker {
   name: string;
   coordinates: [number, number];
   color: [number, number, number];
+  isBest: boolean;
 }
 
 const ROUTE_COLORS: Record<string, [number, number, number]> = {
@@ -57,13 +59,16 @@ function App() {
   const activeStops = useStore((s) => s.activeStops);
   const routeShapes = useRouteShapes();
 
+  const walkRoutes = useStore((s) => s.walkRoutes);
+  const walkTimes = useStore((s) => s.walkTimes);
+  const { best } = useRecommendation();
+
   const stopMarkers: StopMarker[] = activeStops.map((s) => ({
     name: `${s.name} (${s.route})`,
     coordinates: s.coordinates,
     color: ROUTE_COLORS[s.route] ?? [0, 150, 60],
+    isBest: best?.stopId === s.id,
   }));
-
-  const walkRoutes = useStore((s) => s.walkRoutes);
   const [picking, setPicking] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
 
@@ -85,12 +90,14 @@ function App() {
       data: walkRoutes,
       getPath: (d: any) => d.path,
       getColor: (d: any) => {
-        const stop = activeStops.find((s) => s.id === d.stopId);
+        const isBest = best?.stopId === d.stopId;
+        if (isBest) return [100, 200, 255, 230];
+        const stop = activeStops.find((s: any) => s.id === d.stopId);
         return WALK_COLORS[stop?.route ?? ""] ?? [160, 150, 210, 200];
       },
-      getWidth: 3,
+      getWidth: (d: any) => (best?.stopId === d.stopId ? 5 : 3),
       widthMinPixels: 2,
-      widthMaxPixels: 5,
+      widthMaxPixels: 7,
       getDashArray: [4, 3],
       dashJustified: true,
       extensions: [new PathStyleExtension({ dash: true })],
@@ -111,6 +118,18 @@ function App() {
       pickable: true,
     }),
     new ScatterplotLayer<StopMarker>({
+      id: "stop-highlights",
+      data: stopMarkers.filter((d) => d.isBest),
+      getPosition: (d) => d.coordinates,
+      getFillColor: [100, 200, 255, 60],
+      getLineColor: [100, 200, 255, 200],
+      getRadius: 60,
+      radiusMinPixels: 14,
+      radiusMaxPixels: 30,
+      stroked: true,
+      lineWidthMinPixels: 2,
+    }),
+    new ScatterplotLayer<StopMarker>({
       id: "stops",
       data: stopMarkers,
       getPosition: (d) => d.coordinates,
@@ -120,6 +139,32 @@ function App() {
       radiusMaxPixels: 20,
       pickable: true,
     }),
+    new TextLayer({
+      id: "walk-labels",
+      data: walkRoutes.map((wr: any) => {
+        const stop = activeStops.find((s) => s.id === wr.stopId);
+        const mins = walkTimes[wr.stopId];
+        const path = wr.path as [number, number][];
+        const mid = path[Math.floor(path.length / 2)] ?? [0, 0];
+        return {
+          position: mid,
+          text: `${stop?.name ?? "?"} · ${mins != null ? mins + "m walk" : "..."}`,
+          isBest: best?.stopId === wr.stopId,
+        };
+      }),
+      getPosition: (d: any) => d.position,
+      getText: (d: any) => d.text,
+      getColor: (d: any) => d.isBest ? [100, 200, 255, 255] : [200, 200, 220, 200],
+      getSize: (d: any) => d.isBest ? 14 : 12,
+      fontFamily: "system-ui, sans-serif",
+      fontWeight: 600,
+      outlineWidth: 2,
+      outlineColor: [20, 20, 30, 200],
+      billboard: true,
+      getTextAnchor: "middle",
+      getAlignmentBaseline: "center",
+      getPixelOffset: [0, -14],
+    } as any),
     new IconLayer<Train>({
       id: "trains",
       data: trains,
