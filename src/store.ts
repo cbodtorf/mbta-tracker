@@ -41,8 +41,8 @@ interface AppState {
 
   alertArmed: boolean;
   setAlertArmed: (armed: boolean) => void;
-  alertFired: boolean;
-  setAlertFired: (fired: boolean) => void;
+  firedVehicleIds: Set<string>;
+  addFiredVehicleId: (id: string) => void;
 }
 
 export const useStore = create<AppState>()(devtools((set) => ({
@@ -101,7 +101,8 @@ export const useStore = create<AppState>()(devtools((set) => ({
   setWalkRoutes: (walkRoutes) => set({ walkRoutes }),
 
   alertArmed: false,
-  setAlertArmed: (alertArmed) => set({ alertArmed, alertFired: false }),
-  alertFired: false,
-  setAlertFired: (alertFired) => set({ alertFired }),
+  setAlertArmed: (alertArmed) => set({ alertArmed, firedVehicleIds: new Set() }),
+  firedVehicleIds: new Set<string>(),
+  addFiredVehicleId: (id) =>
+    set((state) => ({ firedVehicleIds: new Set([...state.firedVehicleIds, id]) })),
 }), { name: "mbta-store" }));

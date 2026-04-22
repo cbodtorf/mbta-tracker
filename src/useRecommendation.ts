@@ -10,6 +10,8 @@ export interface StopRecommendation {
   bufferMinutes: number | null;
   nextTrainArrivesIn: number | null;
   catchable: boolean;
+  vehicleId: string | null;
+  arrivalTime: string | null;
 }
 
 export interface Recommendation {
@@ -52,6 +54,8 @@ export function useRecommendation(): Recommendation {
         bufferMinutes: null,
         nextTrainArrivesIn: null,
         catchable: false,
+        vehicleId: null,
+        arrivalTime: null,
       };
 
       if (hasDisruption || walkMin === null) return noData;
@@ -85,6 +89,8 @@ export function useRecommendation(): Recommendation {
           : null,
         nextTrainArrivesIn: Math.round(nextTrain.arrivesIn),
         catchable: !!catchableTrain,
+        vehicleId: catchableTrain?.vehicleId ?? nextTrain.vehicleId ?? null,
+        arrivalTime: catchableTrain?.arrivalTime ?? nextTrain.arrivalTime ?? null,
       };
     });
 

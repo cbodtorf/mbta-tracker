@@ -53,7 +53,7 @@ function App() {
   const setHome = useStore((s) => s.setHome);
   const alertArmed = useStore((s) => s.alertArmed);
   const setAlertArmed = useStore((s) => s.setAlertArmed);
-  const alertFired = useStore((s) => s.alertFired);
+  const firedCount = useStore((s) => s.firedVehicleIds.size);
   const trains = useStore((s) => s.trains);
   const predictions = useStore((s) => s.predictions);
   const activeStops = useStore((s) => s.activeStops);
@@ -199,17 +199,29 @@ function App() {
             const mins = Math.round(
               (new Date(p.arrivalTime!).getTime() - Date.now()) / 60_000
             );
-            return { stopName: stop?.name ?? p.stopId, mins };
-          })
-          .filter((p) => p.mins > 0)
-          .sort((a, b) => a.mins - b.mins);
+            return { stopName: stop?.name ?? p.stopId, mins, stopId: p.stopId };
+          });
 
-        const etas = vehiclePreds
-          .map((p) => `${p.stopName}: ${p.mins} min`)
-          .join("\n");
+        // Group by stop — keep only the soonest prediction per stop
+        const byStop: Record<string, any> = {};
+        for (const p of vehiclePreds) {
+          const existing = byStop[p.stopId];
+          if (!existing || Math.abs(p.mins) < Math.abs(existing.mins)) {
+            byStop[p.stopId] = p;
+          }
+        }
+
+        const stopLines = Object.values(byStop)
+          .sort((a, b) => a.mins - b.mins)
+          .map((p) => {
+            if (p.mins <= 0) return `${p.stopName}: passed`;
+            // If soonest arrival is >30min, likely next trip — train already passed
+            if (p.mins > 30) return `${p.stopName}: passed`;
+            return `${p.stopName}: ${p.mins} min`;
+          });
 
         return {
-          text: `${object.routeId} — ${object.vehicleId}\n${object.currentStatus}${etas ? "\n" + etas : ""}`,
+          text: `${object.routeId} — ${object.vehicleId}\n${object.currentStatus}${stopLines.length ? "\n" + stopLines.join("\n") : ""}`,
         };
       }
       return { text: object.name };
@@ -263,7 +275,7 @@ function App() {
         darkMode={darkMode}
         onToggleDark={() => setDarkMode((d) => !d)}
         alertArmed={alertArmed}
-        alertFired={alertFired}
+        firedCount={firedCount}
         onToggleAlert={() => setAlertArmed(!alertArmed)}
       />
     </div>
@@ -278,7 +290,7 @@ function HomePanel({
   darkMode,
   onToggleDark,
   alertArmed,
-  alertFired,
+  firedCount,
   onToggleAlert,
 }: {
   home: [number, number];
@@ -288,7 +300,7 @@ function HomePanel({
   darkMode: boolean;
   onToggleDark: () => void;
   alertArmed: boolean;
-  alertFired: boolean;
+  firedCount: number;
   onToggleAlert: () => void;
 }) {
   return (
@@ -367,7 +379,11 @@ function HomePanel({
               />
             </button>
             <span style={{ fontSize: 11, color: "#ccc" }}>
-              {alertFired ? "Alert sent!" : alertArmed ? "Alert armed" : "Slack alert"}
+              {alertArmed
+                ? firedCount > 0
+                  ? `Sent ${firedCount} alert${firedCount > 1 ? "s" : ""}`
+                  : "Alert armed"
+                : "Slack alert"}
             </span>
             <button
               onClick={() => {
