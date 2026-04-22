@@ -369,6 +369,32 @@ function HomePanel({
             <span style={{ fontSize: 11, color: "#ccc" }}>
               {alertFired ? "Alert sent!" : alertArmed ? "Alert armed" : "Slack alert"}
             </span>
+            <button
+              onClick={() => {
+                fetch("/api/slack", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ text: "\u{1F6A8} Test alert from MBTA Tracker" }),
+                })
+                  .then((res) => {
+                    if (!res.ok) console.error("Test alert failed:", res.status);
+                  })
+                  .catch(console.error);
+              }}
+              style={{
+                marginLeft: "auto",
+                background: "none",
+                border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: 4,
+                padding: "1px 6px",
+                fontSize: 10,
+                cursor: "pointer",
+                color: "#888",
+              }}
+              title="Send test message to Slack"
+            >
+              Test
+            </button>
           </div>
         </>
       )}

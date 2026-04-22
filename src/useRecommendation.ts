@@ -99,7 +99,7 @@ export function useRecommendation(): Recommendation {
         : null;
 
     const leaveNow =
-      catchable.length > 0 && catchable.every((r) => r.bufferMinutes! < 3);
+      best !== null && best.catchable && best.bufferMinutes !== null && best.bufferMinutes < 3;
 
     return { best, all: stopRecs, leaveNow };
   }, [predictions, alerts, STOPS, walkTimes, tick]);
