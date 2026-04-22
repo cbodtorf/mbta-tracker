@@ -47,12 +47,17 @@ function StopCard({ rec, isBest }: { rec: StopRecommendation; isBest: boolean })
           {rec.route}
         </span>
       </div>
+      {!rec.catchable && rec.nextTrainArrivesIn !== null && (
+        <div style={{ fontSize: 11, color: "#f87171", marginBottom: 4 }}>
+          Next train in {rec.nextTrainArrivesIn}m — can't make it (need {rec.walkMinutes ?? "?"}m walk)
+        </div>
+      )}
       <div style={{ display: "flex", gap: 16, fontSize: 13 }}>
         <span>
-          Walk: <strong>{rec.walkMinutes}m</strong>
+          Walk: <strong>{rec.walkMinutes !== null ? `${rec.walkMinutes}m` : "..."}</strong>
         </span>
         <span>
-          Train:{" "}
+          {rec.catchable ? "Train" : "Next catchable"}:{" "}
           <strong>
             {rec.trainArrivesIn !== null ? `${rec.trainArrivesIn}m` : "—"}
           </strong>
@@ -85,7 +90,12 @@ export default function RecommendationPanel() {
           No trains available
         </div>
       )}
-      {all.map((rec) => (
+      {[...all]
+        .sort((a, b) => {
+          if (a.catchable !== b.catchable) return a.catchable ? -1 : 1;
+          return (a.walkMinutes ?? Infinity) - (b.walkMinutes ?? Infinity);
+        })
+        .map((rec) => (
         <StopCard
           key={rec.stopId}
           rec={rec}

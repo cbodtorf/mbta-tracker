@@ -1,23 +1,21 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import Map from "react-map-gl/mapbox";
 import DeckGL from "@deck.gl/react";
-import { ScatterplotLayer } from "@deck.gl/layers";
+import { IconLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { PathStyleExtension } from "@deck.gl/extensions";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { usePredictions } from "./usePredictions";
 import { useVehicles } from "./useVehicles";
 import { useAlerts } from "./useAlerts";
 import { useStore } from "./store";
+import { useStops } from "./useStops";
 import type { Train } from "./types";
+import { useRouteShapes, type RouteShape } from "./useRouteShapes";
+import { useWalkTimes } from "./useWalkTimes";
 import PredictionPanel from "./PredictionPanel";
 import RecommendationPanel from "./RecommendationPanel";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
-
-// 35 Russell St, Brookline, MA
-const HOME: [number, number] = [
-  parseFloat(import.meta.env.VITE_HOME_LNG),
-  parseFloat(import.meta.env.VITE_HOME_LAT),
-];
 
 interface StopMarker {
   name: string;
@@ -25,49 +23,91 @@ interface StopMarker {
   color: [number, number, number];
 }
 
-const STOPS: StopMarker[] = [
-  {
-    name: "Harvard Ave (Green-B)",
-    coordinates: [-71.1313, 42.3503],
-    color: [0, 128, 0],
-  },
-  {
-    name: "Coolidge Corner (Green-C)",
-    coordinates: [-71.1213, 42.3424],
-    color: [0, 180, 0],
-  },
-];
-
-const HOME_MARKER = {
-  name: "Home",
-  coordinates: HOME,
-  color: [30, 100, 220] as [number, number, number],
-};
-
-const INITIAL_VIEW_STATE = {
-  longitude: HOME[0],
-  latitude: HOME[1],
-  zoom: 14.5,
-  pitch: 0,
-  bearing: 0,
-};
-
 const ROUTE_COLORS: Record<string, [number, number, number]> = {
-  "Green-B": [0, 150, 60],
-  "Green-C": [0, 180, 100],
+  "Green-B": [120, 200, 155],
+  "Green-C": [80, 190, 180],
+  "Green-D": [150, 210, 130],
+  "Green-E": [100, 185, 145],
 };
+
+const WALK_COLORS: Record<string, [number, number, number, number]> = {
+  "Green-B": [170, 140, 210, 200],
+  "Green-C": [130, 160, 220, 200],
+  "Green-D": [180, 155, 195, 200],
+  "Green-E": [145, 145, 210, 200],
+};
+
 
 function App() {
+  useStops();
+  useWalkTimes();
   usePredictions();
   useVehicles();
   useAlerts();
 
+  const home = useStore((s) => s.home);
+  const setHome = useStore((s) => s.setHome);
   const trains = useStore((s) => s.trains);
+  const predictions = useStore((s) => s.predictions);
+  const activeStops = useStore((s) => s.activeStops);
+  const routeShapes = useRouteShapes();
+
+  const stopMarkers: StopMarker[] = activeStops.map((s) => ({
+    name: `${s.name} (${s.route})`,
+    coordinates: s.coordinates,
+    color: ROUTE_COLORS[s.route] ?? [0, 150, 60],
+  }));
+
+  const walkRoutes = useStore((s) => s.walkRoutes);
+  const [picking, setPicking] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
 
   const layers = [
+    new PathLayer<RouteShape>({
+      id: "route-lines",
+      data: routeShapes,
+      getPath: (d) => d.path,
+      getColor: (d) => ROUTE_COLORS[d.routeId] ?? [200, 200, 200],
+      getWidth: 4,
+      widthMinPixels: 2,
+      widthMaxPixels: 6,
+      getDashArray: [8, 4],
+      dashJustified: true,
+      extensions: [new PathStyleExtension({ dash: true })],
+    }),
+    new PathLayer({
+      id: "walk-routes",
+      data: walkRoutes,
+      getPath: (d: any) => d.path,
+      getColor: (d: any) => {
+        const stop = activeStops.find((s) => s.id === d.stopId);
+        return WALK_COLORS[stop?.route ?? ""] ?? [160, 150, 210, 200];
+      },
+      getWidth: 3,
+      widthMinPixels: 2,
+      widthMaxPixels: 5,
+      getDashArray: [4, 3],
+      dashJustified: true,
+      extensions: [new PathStyleExtension({ dash: true })],
+    }),
+    new IconLayer({
+      id: "home",
+      data: [{ coordinates: home }],
+      getPosition: (d: any) => d.coordinates,
+      getIcon: () => ({
+        url: "/home-icon.svg",
+        width: 48,
+        height: 48,
+        anchorY: 48,
+      }),
+      getSize: 40,
+      sizeMinPixels: 28,
+      sizeMaxPixels: 48,
+      pickable: true,
+    }),
     new ScatterplotLayer<StopMarker>({
       id: "stops",
-      data: STOPS,
+      data: stopMarkers,
       getPosition: (d) => d.coordinates,
       getFillColor: (d) => d.color,
       getRadius: 40,
@@ -75,65 +115,189 @@ function App() {
       radiusMaxPixels: 20,
       pickable: true,
     }),
-    new ScatterplotLayer({
-      id: "home",
-      data: [HOME_MARKER],
-      getPosition: (d) => d.coordinates,
-      getFillColor: (d) => d.color,
-      getRadius: 30,
-      radiusMinPixels: 6,
-      radiusMaxPixels: 14,
-      pickable: true,
-    }),
-    new ScatterplotLayer<Train>({
+    new IconLayer<Train>({
       id: "trains",
       data: trains,
       getPosition: (d) => [d.longitude, d.latitude],
-      getFillColor: (d) => ROUTE_COLORS[d.routeId] ?? [200, 200, 200],
-      getRadius: 60,
-      radiusMinPixels: 6,
-      radiusMaxPixels: 16,
+      getIcon: (d) => ({
+        url: `/train-icon-${d.routeId.toLowerCase()}.svg`,
+        width: 64,
+        height: 64,
+        anchorY: 32,
+      }),
+      getSize: 36,
+      sizeMinPixels: 24,
+      sizeMaxPixels: 48,
+      getAngle: (d) => -d.bearing,
       pickable: true,
-      stroked: true,
-      getLineColor: [255, 255, 255],
-      getLineWidth: 2,
-      lineWidthMinPixels: 2,
       transitions: {
         getPosition: 1000,
+        getAngle: 1000,
       },
     }),
   ];
 
   const getTooltip = useCallback(
-    ({ object }: { object?: any }) => {
+    ({ object, layer }: { object?: any; layer?: any }) => {
       if (!object) return null;
+      if (layer?.id === "home") return null;
       if (object.vehicleId) {
+        const vehiclePreds = predictions
+          .filter((p) => p.vehicleId === object.vehicleId && p.arrivalTime)
+          .map((p) => {
+            const stop = activeStops.find((s) => s.id === p.stopId);
+            const mins = Math.round(
+              (new Date(p.arrivalTime!).getTime() - Date.now()) / 60_000
+            );
+            return { stopName: stop?.name ?? p.stopId, mins };
+          })
+          .filter((p) => p.mins > 0)
+          .sort((a, b) => a.mins - b.mins);
+
+        const etas = vehiclePreds
+          .map((p) => `${p.stopName}: ${p.mins} min`)
+          .join("\n");
+
         return {
-          text: `${object.routeId} — ${object.vehicleId}\n${object.currentStatus}`,
+          text: `${object.routeId} — ${object.vehicleId}\n${object.currentStatus}${etas ? "\n" + etas : ""}`,
         };
       }
       return { text: object.name };
     },
-    []
+    [predictions, activeStops]
+  );
+
+  const onClick = useCallback(
+    (info: any) => {
+      if (picking && info.coordinate) {
+        setHome([info.coordinate[0], info.coordinate[1]]);
+        setPicking(false);
+        return true;
+      }
+      return false;
+    },
+    [picking, setHome]
   );
 
   return (
     <div style={{ width: "100vw", height: "100vh" }}>
       <DeckGL
-        initialViewState={INITIAL_VIEW_STATE}
+        initialViewState={{
+          longitude: home[0],
+          latitude: home[1],
+          zoom: 14,
+          pitch: 0,
+          bearing: 0,
+        }}
         controller={true}
         layers={layers}
-        getTooltip={getTooltip}
+        getTooltip={picking ? undefined : getTooltip}
+        onClick={onClick}
+        getCursor={() => (picking ? "crosshair" : "auto")}
       >
         <Map
           mapboxAccessToken={MAPBOX_TOKEN}
-          mapStyle="mapbox://styles/mapbox/streets-v12"
+          mapStyle={darkMode
+            ? "mapbox://styles/mapbox/dark-v11"
+            : "mapbox://styles/mapbox/streets-v12"
+          }
         />
       </DeckGL>
       <PredictionPanel />
       <RecommendationPanel />
+      <HomePanel
+        home={home}
+        picking={picking}
+        onPickStart={() => setPicking(true)}
+        onCancel={() => setPicking(false)}
+        darkMode={darkMode}
+        onToggleDark={() => setDarkMode((d) => !d)}
+      />
     </div>
   );
+}
+
+function HomePanel({
+  home,
+  picking,
+  onPickStart,
+  onCancel,
+  darkMode,
+  onToggleDark,
+}: {
+  home: [number, number];
+  picking: boolean;
+  onPickStart: () => void;
+  onCancel: () => void;
+  darkMode: boolean;
+  onToggleDark: () => void;
+}) {
+  return (
+    <div style={homePanelStyle}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <div style={{ fontSize: 12, color: "#fff", fontWeight: 600 }}>
+          Home
+        </div>
+        <button
+          onClick={onToggleDark}
+          style={{
+            background: "none",
+            border: "1px solid rgba(255,255,255,0.2)",
+            borderRadius: 4,
+            padding: "2px 8px",
+            fontSize: 14,
+            cursor: "pointer",
+            color: "#fff",
+          }}
+          title={darkMode ? "Light mode" : "Dark mode"}
+        >
+          {darkMode ? "\u2600" : "\u263E"}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: "#aaa", marginBottom: 8 }}>
+        {home[1].toFixed(4)}, {home[0].toFixed(4)}
+      </div>
+      {picking ? (
+        <div>
+          <div style={{ fontSize: 12, color: "#facc15", marginBottom: 6 }}>
+            Click map to set location
+          </div>
+          <button onClick={onCancel} style={btnStyle("#6b7280")}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button onClick={onPickStart} style={btnStyle("#3b82f6")}>
+          Move Home
+        </button>
+      )}
+    </div>
+  );
+}
+
+const homePanelStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 12,
+  right: 12,
+  zIndex: 1,
+  background: "rgba(20, 20, 30, 0.92)",
+  borderRadius: 8,
+  padding: "10px 14px",
+  fontFamily: "system-ui, sans-serif",
+  backdropFilter: "blur(8px)",
+};
+
+function btnStyle(bg: string): React.CSSProperties {
+  return {
+    background: bg,
+    color: "#fff",
+    border: "none",
+    borderRadius: 4,
+    padding: "5px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
 }
 
 export default App;

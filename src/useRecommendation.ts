@@ -1,22 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { useStore, STOPS } from "./store";
-
-const WALK_TIMES: Record<string, number> = {
-  "place-harvd": parseFloat(
-    import.meta.env.VITE_WALK_TIME_HARVARD_AVE_MINS ?? "7"
-  ),
-  "place-cool": parseFloat(
-    import.meta.env.VITE_WALK_TIME_COOLIDGE_CORNER_MINS ?? "12"
-  ),
-};
+import { useStore } from "./store";
 
 export interface StopRecommendation {
   stopId: string;
   stopName: string;
   route: string;
-  walkMinutes: number;
-  trainArrivesIn: number | null; // minutes from now
-  bufferMinutes: number | null; // arrival - walk time
+  walkMinutes: number | null;
+  trainArrivesIn: number | null;
+  bufferMinutes: number | null;
+  nextTrainArrivesIn: number | null;
+  catchable: boolean;
 }
 
 export interface Recommendation {
@@ -28,8 +21,9 @@ export interface Recommendation {
 export function useRecommendation(): Recommendation {
   const predictions = useStore((s) => s.predictions);
   const alerts = useStore((s) => s.alerts);
+  const STOPS = useStore((s) => s.activeStops);
+  const walkTimes = useStore((s) => s.walkTimes);
 
-  // Tick every 15s so Date.now() stays fresh
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 15_000);
@@ -37,31 +31,31 @@ export function useRecommendation(): Recommendation {
   }, []);
 
   return useMemo(() => {
-    void tick; // dependency
+    void tick;
     const now = Date.now();
 
     const stopRecs: StopRecommendation[] = STOPS.map((stop) => {
-      const walkMin = WALK_TIMES[stop.id] ?? 10;
+      const walkMin = walkTimes[stop.id] ?? null;
 
-      // Check if route has service-disrupting alert
       const hasDisruption = alerts.some(
         (a) =>
           a.routeIds.includes(stop.route) &&
           ["SHUTTLE", "SUSPENSION", "NO_SERVICE"].includes(a.effect)
       );
 
-      if (hasDisruption) {
-        return {
-          stopId: stop.id,
-          stopName: stop.name,
-          route: stop.route,
-          walkMinutes: walkMin,
-          trainArrivesIn: null,
-          bufferMinutes: null,
-        };
-      }
+      const noData = {
+        stopId: stop.id,
+        stopName: stop.name,
+        route: stop.route,
+        walkMinutes: walkMin,
+        trainArrivesIn: null,
+        bufferMinutes: null,
+        nextTrainArrivesIn: null,
+        catchable: false,
+      };
 
-      // Find next future arrival
+      if (hasDisruption || walkMin === null) return noData;
+
       const futurePreds = predictions
         .filter((p) => p.stopId === stop.id && p.arrivalTime)
         .map((p) => ({
@@ -71,43 +65,42 @@ export function useRecommendation(): Recommendation {
         .filter((p) => p.arrivesIn > 0)
         .sort((a, b) => a.arrivesIn - b.arrivesIn);
 
-      const next = futurePreds[0];
-      if (!next) {
-        return {
-          stopId: stop.id,
-          stopName: stop.name,
-          route: stop.route,
-          walkMinutes: walkMin,
-          trainArrivesIn: null,
-          bufferMinutes: null,
-        };
-      }
+      if (futurePreds.length === 0) return noData;
 
-      const arrivesIn = Math.round(next.arrivesIn);
-      const buffer = Math.round(next.arrivesIn - walkMin);
+      const nextTrain = futurePreds[0];
+      const catchableTrain = futurePreds.find(
+        (p) => p.arrivesIn - walkMin >= 0
+      );
 
       return {
         stopId: stop.id,
         stopName: stop.name,
         route: stop.route,
         walkMinutes: walkMin,
-        trainArrivesIn: arrivesIn,
-        bufferMinutes: buffer,
+        trainArrivesIn: catchableTrain
+          ? Math.round(catchableTrain.arrivesIn)
+          : null,
+        bufferMinutes: catchableTrain
+          ? Math.round(catchableTrain.arrivesIn - walkMin)
+          : null,
+        nextTrainArrivesIn: Math.round(nextTrain.arrivesIn),
+        catchable: !!catchableTrain,
       };
     });
 
-    // Pick best: largest buffer among stops with data
-    const withBuffer = stopRecs.filter((r) => r.bufferMinutes !== null);
+    const withData = stopRecs.filter((r) => r.bufferMinutes !== null);
+    const catchable = withData.filter((r) => r.catchable);
+    const pool = catchable.length > 0 ? catchable : withData;
     const best =
-      withBuffer.length > 0
-        ? withBuffer.reduce((a, b) =>
-            a.bufferMinutes! >= b.bufferMinutes! ? a : b
+      pool.length > 0
+        ? pool.reduce((a, b) =>
+            (a.walkMinutes ?? Infinity) <= (b.walkMinutes ?? Infinity) ? a : b
           )
         : null;
 
     const leaveNow =
-      withBuffer.length > 0 && withBuffer.every((r) => r.bufferMinutes! < 3);
+      catchable.length > 0 && catchable.every((r) => r.bufferMinutes! < 3);
 
     return { best, all: stopRecs, leaveNow };
-  }, [predictions, alerts, tick]);
+  }, [predictions, alerts, STOPS, walkTimes, tick]);
 }

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useStore } from "./store";
+import { useStore, ROUTE_FILTER } from "./store";
 import type { Alert } from "./types";
 
 const MBTA_BASE = "https://api-v3.mbta.com";
@@ -41,7 +41,7 @@ export function useAlerts() {
 
   useEffect(() => {
     const params = new URLSearchParams({
-      "filter[route]": "Green-B,Green-C",
+      "filter[route]": ROUTE_FILTER,
       "filter[activity]": "BOARD,EXIT,RIDE",
     });
     if (API_KEY) params.set("api_key", API_KEY);

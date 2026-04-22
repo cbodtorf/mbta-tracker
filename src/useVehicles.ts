@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useStore } from "./store";
+import { useStore, ROUTE_FILTER } from "./store";
 import type { Train } from "./types";
 
 const MBTA_BASE = "https://api-v3.mbta.com";
@@ -25,7 +25,7 @@ export function useVehicles() {
 
   useEffect(() => {
     const params = new URLSearchParams({
-      "filter[route]": "Green-B,Green-C",
+      "filter[route]": ROUTE_FILTER,
     });
     if (API_KEY) params.set("api_key", API_KEY);
 

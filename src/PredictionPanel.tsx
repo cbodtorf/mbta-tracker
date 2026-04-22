@@ -1,4 +1,5 @@
-import { useStore, STOPS } from "./store";
+import { useState } from "react";
+import { useStore } from "./store";
 
 function minutesUntil(isoTime: string | null): number | null {
   if (!isoTime) return null;
@@ -23,13 +24,19 @@ const EFFECT_LABELS: Record<string, string> = {
 export default function PredictionPanel() {
   const predictions = useStore((s) => s.predictions);
   const alerts = useStore((s) => s.alerts);
+  const STOPS = useStore((s) => s.activeStops);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggle = (id: string) =>
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   return (
     <div style={panelStyle}>
-      <h2 style={{ margin: "0 0 12px", fontSize: 16, color: "#fff" }}>
-        Inbound Predictions
+      <h2 style={{ margin: "0 0 8px", fontSize: 14, color: "#fff" }}>
+        Predictions
       </h2>
       {STOPS.map((stop) => {
+        const open = expanded[stop.id] ?? false;
         const routeAlerts = alerts.filter((a) =>
           a.routeIds.includes(stop.route)
         );
@@ -40,36 +47,52 @@ export default function PredictionPanel() {
               (new Date(a.arrivalTime ?? "").getTime() || Infinity) -
               (new Date(b.arrivalTime ?? "").getTime() || Infinity)
           )
-          .slice(0, 4);
+          .slice(0, 6);
+
+        const nextMins = stopPreds.length
+          ? minutesUntil(stopPreds[0].arrivalTime)
+          : null;
 
         return (
-          <div key={stop.id} style={{ marginBottom: 16 }}>
-            <div style={stopHeaderStyle}>
-              <span style={routeBadgeStyle(stop.route)}>{stop.route}</span>
-              <span>{stop.name}</span>
-            </div>
-            {routeAlerts.map((a) => (
-              <div key={a.id} style={alertStyle}>
-                <span style={alertBadgeStyle}>
-                  {EFFECT_LABELS[a.effect] ?? a.effect}
-                </span>
-                <span>{a.header}</span>
+          <div key={stop.id} style={{ marginBottom: 4 }}>
+            <button onClick={() => toggle(stop.id)} style={accordionBtnStyle}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                <span style={routeBadgeStyle}>{stop.route}</span>
+                <span>{stop.name}</span>
               </div>
-            ))}
-            {stopPreds.length === 0 ? (
-              <div style={rowStyle}>No predictions</div>
-            ) : (
-              stopPreds.map((p) => {
-                const mins = minutesUntil(p.arrivalTime);
-                return (
-                  <div key={p.id} style={rowStyle}>
-                    <span style={{ flex: 1 }}>
-                      {p.vehicleId ?? p.tripId.slice(-4)}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {!open && nextMins !== null && (
+                  <span style={etaStyle(nextMins)}>{formatMinutes(nextMins)}</span>
+                )}
+                <span style={{ fontSize: 10, color: "#888" }}>{open ? "▲" : "▼"}</span>
+              </div>
+            </button>
+            {open && (
+              <div style={accordionBodyStyle}>
+                {routeAlerts.map((a) => (
+                  <div key={a.id} style={alertStyle}>
+                    <span style={alertBadgeStyle}>
+                      {EFFECT_LABELS[a.effect] ?? a.effect}
                     </span>
-                    <span style={etaStyle(mins)}>{formatMinutes(mins)}</span>
+                    <span style={alertTextStyle}>{a.header}</span>
                   </div>
-                );
-              })
+                ))}
+                {stopPreds.length === 0 ? (
+                  <div style={rowStyle}>No predictions</div>
+                ) : (
+                  stopPreds.map((p) => {
+                    const mins = minutesUntil(p.arrivalTime);
+                    return (
+                      <div key={p.id} style={rowStyle}>
+                        <span style={{ flex: 1 }}>
+                          {p.vehicleId ?? p.tripId.slice(-4)}
+                        </span>
+                        <span style={etaStyle(mins)}>{formatMinutes(mins)}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             )}
           </div>
         );
@@ -85,46 +108,55 @@ const panelStyle: React.CSSProperties = {
   zIndex: 1,
   background: "rgba(20, 20, 30, 0.9)",
   borderRadius: 8,
-  padding: "14px 16px",
-  minWidth: 220,
+  padding: "10px 12px",
+  width: 240,
   fontFamily: "system-ui, sans-serif",
-  fontSize: 14,
+  fontSize: 13,
   color: "#ccc",
   backdropFilter: "blur(8px)",
 };
 
-const stopHeaderStyle: React.CSSProperties = {
+const accordionBtnStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 8,
-  fontWeight: 600,
+  justifyContent: "space-between",
+  width: "100%",
+  background: "none",
+  border: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  padding: "6px 0",
   color: "#fff",
-  marginBottom: 6,
+  fontWeight: 600,
+  fontSize: 13,
+  cursor: "pointer",
+  fontFamily: "inherit",
 };
 
-function routeBadgeStyle(route: string): React.CSSProperties {
-  return {
-    background: route === "Green-B" ? "#00843d" : "#00843d",
-    color: "#fff",
-    borderRadius: 4,
-    padding: "1px 6px",
-    fontSize: 12,
-    fontWeight: 700,
-  };
-}
+const accordionBodyStyle: React.CSSProperties = {
+  padding: "4px 0 8px",
+};
+
+const routeBadgeStyle: React.CSSProperties = {
+  background: "#00843d",
+  color: "#fff",
+  borderRadius: 3,
+  padding: "1px 5px",
+  fontSize: 11,
+  fontWeight: 700,
+};
 
 const rowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
-  padding: "3px 0",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  padding: "2px 0",
+  borderBottom: "1px solid rgba(255,255,255,0.05)",
 };
 
 function etaStyle(mins: number | null): React.CSSProperties {
-  let color = "#4ade80"; // green
-  if (mins !== null && mins <= 3) color = "#f87171"; // red
-  else if (mins !== null && mins <= 6) color = "#facc15"; // yellow
-  return { fontWeight: 700, color };
+  let color = "#4ade80";
+  if (mins !== null && mins <= 3) color = "#f87171";
+  else if (mins !== null && mins <= 6) color = "#facc15";
+  return { fontWeight: 700, color, fontSize: 13 };
 }
 
 const alertStyle: React.CSSProperties = {
@@ -132,10 +164,19 @@ const alertStyle: React.CSSProperties = {
   border: "1px solid rgba(248, 113, 113, 0.4)",
   borderRadius: 4,
   padding: "4px 8px",
-  marginBottom: 6,
-  fontSize: 12,
+  marginBottom: 4,
+  fontSize: 11,
   lineHeight: "1.4",
   color: "#fca5a5",
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 6,
+};
+
+const alertTextStyle: React.CSSProperties = {
+  flex: 1,
+  wordWrap: "break-word",
+  overflowWrap: "break-word",
 };
 
 const alertBadgeStyle: React.CSSProperties = {
@@ -145,6 +186,6 @@ const alertBadgeStyle: React.CSSProperties = {
   padding: "1px 5px",
   fontSize: 10,
   fontWeight: 700,
-  marginRight: 6,
   textTransform: "uppercase",
+  flexShrink: 0,
 };

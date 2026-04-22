@@ -1,31 +1,25 @@
 import { create } from "zustand";
+import { devtools } from "zustand/middleware";
 import type { Alert, Prediction, Stop, Train } from "./types";
 
-export const STOPS: Stop[] = [
-  {
-    id: "place-harvd",
-    name: "Harvard Ave",
-    coordinates: [-71.1313, 42.3503],
-    route: "Green-B",
-  },
-  {
-    id: "place-cool",
-    name: "Coolidge Corner",
-    coordinates: [-71.1213, 42.3424],
-    route: "Green-C",
-  },
+export const ROUTES = ["Green-B", "Green-C", "Green-D", "Green-E"];
+export const ROUTE_FILTER = ROUTES.join(",");
+
+const DEFAULT_HOME: [number, number] = [
+  parseFloat(import.meta.env.VITE_HOME_LNG ?? "-71.1304"),
+  parseFloat(import.meta.env.VITE_HOME_LAT ?? "42.3467"),
 ];
 
-// MBTA predictions return child stop IDs, not parent IDs.
-// Map child → parent so we can match predictions to stops.
-export const CHILD_TO_PARENT_STOP: Record<string, string> = {
-  "70035": "place-harvd", // Harvard Ave inbound
-  "70036": "place-harvd", // Harvard Ave outbound
-  "70219": "place-cool",  // Coolidge Corner outbound
-  "70220": "place-cool",  // Coolidge Corner inbound
-};
-
 interface AppState {
+  home: [number, number];
+  setHome: (home: [number, number]) => void;
+
+  activeStops: Stop[];
+  setActiveStops: (stops: Stop[]) => void;
+
+  childToParent: Record<string, string>;
+  setChildToParent: (map: Record<string, string>) => void;
+
   predictions: Prediction[];
   setPredictions: (predictions: Prediction[]) => void;
   updatePrediction: (prediction: Prediction) => void;
@@ -38,9 +32,24 @@ interface AppState {
 
   alerts: Alert[];
   setAlerts: (alerts: Alert[]) => void;
+
+  walkTimes: Record<string, number>; // stopId → minutes
+  setWalkTimes: (walkTimes: Record<string, number>) => void;
+
+  walkRoutes: { stopId: string; path: [number, number][] }[];
+  setWalkRoutes: (routes: { stopId: string; path: [number, number][] }[]) => void;
 }
 
-export const useStore = create<AppState>((set) => ({
+export const useStore = create<AppState>()(devtools((set) => ({
+  home: DEFAULT_HOME,
+  setHome: (home) => set({ home }),
+
+  activeStops: [],
+  setActiveStops: (activeStops) => set({ activeStops }),
+
+  childToParent: {},
+  setChildToParent: (childToParent) => set({ childToParent }),
+
   predictions: [],
   setPredictions: (predictions) => set({ predictions }),
   updatePrediction: (prediction) =>
@@ -79,4 +88,10 @@ export const useStore = create<AppState>((set) => ({
 
   alerts: [],
   setAlerts: (alerts) => set({ alerts }),
-}));
+
+  walkTimes: {},
+  setWalkTimes: (walkTimes) => set({ walkTimes }),
+
+  walkRoutes: [],
+  setWalkRoutes: (walkRoutes) => set({ walkRoutes }),
+}), { name: "mbta-store" }));
