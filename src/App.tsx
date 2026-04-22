@@ -71,15 +71,15 @@ function App() {
     new PathLayer<RouteShape>({
       id: "route-lines",
       data: routeShapes,
-      getPath: (d) => d.path,
-      getColor: (d) => ROUTE_COLORS[d.routeId] ?? [200, 200, 200],
+      getPath: (d: RouteShape) => d.path,
+      getColor: (d: RouteShape) => ROUTE_COLORS[d.routeId] ?? [200, 200, 200],
       getWidth: 4,
       widthMinPixels: 2,
       widthMaxPixels: 6,
       getDashArray: [8, 4],
       dashJustified: true,
       extensions: [new PathStyleExtension({ dash: true })],
-    }),
+    } as any),
     new PathLayer({
       id: "walk-routes",
       data: walkRoutes,
@@ -94,7 +94,7 @@ function App() {
       getDashArray: [4, 3],
       dashJustified: true,
       extensions: [new PathStyleExtension({ dash: true })],
-    }),
+    } as any),
     new IconLayer({
       id: "home",
       data: [{ coordinates: home }],

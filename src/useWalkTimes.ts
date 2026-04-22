@@ -9,7 +9,7 @@ export function useWalkTimes() {
   const activeStops = useStore((s) => s.activeStops);
   const setWalkTimes = useStore((s) => s.setWalkTimes);
   const setWalkRoutes = useStore((s) => s.setWalkRoutes);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (activeStops.length === 0) return;

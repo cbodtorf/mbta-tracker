@@ -19,7 +19,7 @@ function parseAlert(item: any): Alert {
     description: attrs.description ?? "",
     effect: attrs.effect ?? "",
     severity: attrs.severity ?? 0,
-    routeIds: [...new Set(routeIds)],
+    routeIds: [...new Set(routeIds)] as string[],
     activePeriods: (attrs.active_period ?? []).map((p: any) => ({
       start: p.start,
       end: p.end,
